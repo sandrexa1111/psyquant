@@ -1,0 +1,1937 @@
+class TradeDataSource(ABC):
+    @abstractmethod
+    def get_trades(self, start_date, end_date) -> List[Trade]
+    
+    @abstractmethod
+    def get_current_positions(self) -> List[Position]
+    
+    @abstractmethod
+    def get_account_snapshot(self) -> AccountSnapshot
+
+# Both adapters return identical data structures
+```
+
+Users can switch modes in Settings without data loss (AI analysis persists).
+
+---
+
+### **1. ONBOARDING FLOW REDESIGN**
+
+**Screen 1: Mode Selection - "How Would You Like to Start Trading?"**
+
+UI Layout:
+```
+┌─────────────────────────────────────────────────────────┐
+│          How Would You Like to Start Trading?           │
+│    Select your environment. You can change this later.  │
+└─────────────────────────────────────────────────────────┘
+
+┌────────────────────┐  ┌────────────────────┐
+│  🎮 Sandbox        │  │  🌐 Alpaca Paper  │
+│  Simulation        │  │  Trading           │
+│                    │  │                    │
+│  Risk-free with    │  │  Real market data  │
+│  $100k virtual     │  │  with your own     │
+│  capital           │  │  Alpaca account    │
+│                    │  │                    │
+│  ✓ Start in 30s    │  │  ✓ Real fills      │
+│  ✓ No setup        │  │  ✓ Sync portfolio  │
+│  ✓ Full AI         │  │  ✓ AES-256 secure  │
+│                    │  │                    │
+│ [Enter Sandbox] ←──│  │→ [Connect Alpaca] │
+│                    │  │                    │
+│ 👥 12,847 started  │  │  🔒 Bank-level     │
+│     here           │  │      encryption    │
+└────────────────────┘  └────────────────────┘
+
+                [Compare Options]
+```
+
+**Copy improvements:**
+- Sandbox card: Add "New to trading? →" badge
+- Alpaca card: Add "Experienced trader? →" badge
+- Below cards: "Both get full AI analysis • Switch anytime in Settings"
+
+---
+
+**Screen 2: Personalization - "Tell Us About Your Trading"**
+
+UI: Step indicator (2 of 4) at top
+```
+What's your experience level?
+[――――●――――――――] Beginner ↔ Expert
+
+What's your trading style? (select all)
+☐ Day Trading (close positions same day)
+☐ Swing Trading (hold 2-10 days)
+☐ Position Trading (hold weeks/months)
+
+What's your risk tolerance?
+( ) Conservative  ( ) Moderate  (•) Aggressive
+
+What's your main goal?
+☐ Learn to trade systematically
+☐ Improve discipline and reduce biases
+☐ Test and refine strategies
+☐ Transition from paper to live trading
+
+[Continue →]
+```
+
+Store responses in `user_profile` table. AI Coach uses this for personalized insights.
+
+---
+
+**Screen 3a: Sandbox Setup (if Sandbox selected)**
+```
+Set Your Starting Capital
+
+This is virtual money—experiment freely.
+
+Presets:
+┌────────┐ ┌────────┐ ┌─────────┐ ┌─────────┐
+│ $10,000│ │ $50,000│ │ $100,000│ │ Custom  │
+└────────┘ └────────┘ └─────────┘ └─────────┘
+    (selected)
+
+Your sandbox account will track:
+✓ All trades and positions
+✓ Real market prices
+✓ Realistic commissions ($0)
+✓ AI analysis of every decision
+
+[Create Sandbox Account →]
+```
+
+Backend: Create `sandbox_account` record with starting balance.
+
+---
+
+**Screen 3b: Alpaca Connection (if Alpaca selected)**
+```
+Connect Your Alpaca Paper Trading Account
+
+1. Log in to your Alpaca account
+2. Go to Paper Trading → API Keys
+3. Generate new API key (if needed)
+4. Paste your keys below
+
+┌─────────────────────────────────────────┐
+│ API Key ID                              │
+│ [                                     ] │
+│                                         │
+│ Secret Key                              │
+│ [                                     ] │
+└─────────────────────────────────────────┘
+
+☐ I understand my keys are encrypted with AES-256
+  and only used to pull trading data (not execute trades)
+
+[Test Connection] [Connect & Sync →]
+```
+
+Backend:
+- Validate keys with Alpaca API test call
+- Encrypt and store in `alpaca_credentials`
+- Queue initial sync job (pull last 90 days of trades)
+- Show loading: "Syncing your trade history... (47 trades found)"
+
+---
+
+**Screen 4: Interactive Tutorial**
+```
+Let's Take a Quick Tour
+
+[Step 1/3] Make Your First Simulated Trade
+
+(Show simplified order ticket)
+Symbol: SPY
+Shares: 1
+Side: [BUY]
+
+[Execute Demo Trade →]
+
+(After clicking)
+✓ Trade executed! Now watch this...
+
+(AI insight appears)
+💡 AI Analysis: This was a momentum entry during 
+   an uptrend. Win probability: 67% based on similar
+   historical setups.
+
+[Next: See Your Skill Profile →]
+```
+
+Tutorial stores `onboarding_completed: true` in user_profile.
+
+---
+
+### **2. DASHBOARD REDESIGN - "Trading Command Center"**
+
+**Top Banner (Persistent):**
+```
+┌────────────────────────────────────────────────────────┐
+│ ℹ️ Live Data Connected: Trends calculated on your     │
+│    Alpaca portfolio history (Last synced: 2 mins ago) │
+│                                    [Sync Now] [Switch] │
+└────────────────────────────────────────────────────────┘
+```
+
+**Metric Cards Row:**
+```
+┌──────────────────┐ ┌──────────────────┐ ┌────────────────┐
+│ BUYING POWER     │ │ UNREALIZED P/L   │ │ PORTFOLIO VALUE│
+│ $400,000.00 📊   │ │ -$347.82 📉      │ │ $100,000 💰    │
+│                  │ │ Total            │ │                │
+│ ▲ N/A            │ │ ▼ $68.82 (16%)   │ │ ▲ 0.78%        │
+│ since last month │ │ since last month │ │ since last     │
+│                  │ │                  │ │ month          │
+│ (sparkline)      │ │ ⚠️ Alert: High    │ │ (sparkline)    │
+│                  │ │ concentration    │ │                │
+└──────────────────┘ └──────────────────┘ └────────────────┘
+
+┌──────────────────┐
+│ DAY TRADES       │
+│ 0 Count 📊       │
+│                  │
+│ ▲ N/A            │
+│ since last month │
+│                  │
+│ (sparkline)      │
+└──────────────────┘
+```
+
+**On hover:** Metric card expands to show:
+- Mini line chart (last 30 days)
+- "View details →" link to Analytics page
+- Tooltip: "This is 15% better than your 3-month average"
+
+**Red border** on Unrealized P/L if negative + shows actionable text:
+- "Why am I losing? Ask AI Coach →"
+
+---
+
+**Chart Section:**
+```
+Traffic Sources (Stock: SPY)               [Actions ▼]
+● Close Price  ● Volume (Scaled)
+
+(Chart with AI annotation overlays)
+
+         🔴 FOMO Entry           🟢 Disciplined Exit
+           ↓                        ↓
+    ╱─╲   │   ╱╲              ╱╲   │
+   ╱   ╲ ╱   ╱  ╲            ╱  ╲  │
+  ╱     ╲╱───    ╲          ╱    ╲─┘
+ ╱                ╲        ╱
+─────────────────────────────────────────
+08:33  09:40  10:12  11:29  12:54  15:02
+
+Hover over any point:
+┌────────────────────────────────┐
+│ 🤖 AI Insight:                 │
+│ You entered during a           │
+│ volatility spike. This         │
+│ matches your "overtrading      │
+│ after news" pattern.           │
+│                                │
+│ [Why did this happen?] →       │
+└────────────────────────────────┘
+```
+
+**Implementation:**
+- Store AI annotations in `trade_insights` table linked to trades
+- Frontend: Custom Recharts tooltip component
+- Backend: Generate annotations during trade analysis job
+- Use NLP to generate concise 1-2 sentence insights
+
+---
+
+**Floating AI Coach Button (Bottom-Right):**
+```
+┌──────────────────────────────┐
+│ 🤖 Ask AI Coach              │
+│                              │
+│ Suggested questions:         │
+│ • Why did I lose yesterday?  │
+│ • What's my biggest weakness?│
+│ • Show overtrading patterns  │
+│                              │
+│ [Type your question...] →    │
+└──────────────────────────────┘
+```
+
+Always visible, expands on click to full chat interface.
+
+---
+
+**Active Positions Section (replacing empty "Target Section"):**
+
+If positions exist:
+```
+Target Section (Positions)               [View Details]
+
+Symbol  Qty   Entry    Current   P/L      Target    Status
+────────────────────────────────────────────────────────────
+SPY     10    $450.20  $452.80  +$26.00   $460     ⚠️ Near exit
+AAPL    5     $180.50  $179.10  -$7.00    $185     🟢 Holding
+```
+
+If no positions:
+```
+No Active Positions
+
+Based on your Strategy DNA, you might like:
+
+🎯 Recommended Setup (from AI):
+   • Symbol: TSLA
+   • Pattern: Momentum breakout (your best strategy)
+   • Entry: $245.50 (current: $243.20)
+   • Why: Aligns with your 68% win-rate pattern
+
+[See Full AI Recommendations →] (Pro feature)
+```
+
+---
+
+### **3. PORTFOLIO ANALYTICS PAGE - "Deep Dive into Performance"**
+
+**Header:**
+```
+Portfolio Analytics
+Deep dive into performance, skills, and psychology
+
+Time Range: [1M] [3M] [1Y •] [ALL]
+```
+
+---
+
+**Trader Skill DNA Card (Left Column):**
+```
+┌────────────────────────────────────────┐
+│ Trader Skill DNA           63 /100     │
+│                                        │
+│           Profitability                │
+│                 51                     │
+│            ╱────────╲                  │
+│  Risk Mgmt         Timing              │
+│     70        75                       │
+│          │           │                 │
+│       Discipline                       │
+│            80                          │
+│                                        │
+│  Your strongest: Discipline (80)       │
+│  Needs work: Profitability (51)        │
+│                                        │
+│  [View Skill History →]                │
+└────────────────────────────────────────┘
+```
+
+**On click any dimension:**
+- Modal opens showing:
+  - Historical trend line (skill score over time)
+  - Example trades that affected this score
+  - Peer comparison: "You're in top 32% for Risk Mgmt"
+  - Recommendations: "To improve timing: Watch for volatility spikes before entry"
+
+**Backend:**
+- Skill scoring algorithm runs nightly (Celery job)
+- Calculate from trade history:
+  - **Profitability**: Win rate × Avg win size
+  - **Risk Mgmt**: Stop-loss adherence + position sizing consistency
+  - **Timing**: Distance from optimal entry/exit (based on hindsight analysis)
+  - **Discipline**: Strategy adherence (detect deviations from user's patterns)
+- Store in `skill_scores` table with timestamp
+
+---
+
+**Cognitive Biases Card (Middle Column):**
+```
+┌────────────────────────────────────────┐
+│ Cognitive Biases          3 Detected   │
+│                                        │
+│  🔴 FOMO (Fear of Missing Out)         │
+│  ████████░░ 78% severity               │
+│  Detected in 12 of your last 50 trades │
+│  Cost: -$1,240 average                 │
+│  [See Examples →] [Create Alert]       │
+│                                        │
+│  🟡 Overtrading                        │
+│  █████░░░░░ 45% severity               │
+│  You trade 2.3x more after losses      │
+│  Cost: -$680 average                   │
+│  [See Examples →] [Create Alert]       │
+│                                        │
+│  🟢 Hesitation Bias (mild)             │
+│  ███░░░░░░░ 23% severity               │
+│  Missed 5 setups matching your wins    │
+│  Opportunity cost: +$890 potential     │
+│  [See Examples →]                      │
+│                                        │
+│  [View Full Bias Report →]             │
+└────────────────────────────────────────┘
+```
+
+**"See Examples"** opens Trade Replay filtered to trades showing that bias.
+
+**"Create Alert"** enables real-time notification:
+- "🔴 FOMO Alert: You're about to enter against your discipline rules. Proceed?"
+
+**Backend:**
+- Bias detection ML model (trained on labeled trade patterns)
+- Features: Trade frequency after loss, entry timing relative to breakouts, position size variance
+- Runs after each trade sync
+- Store in `detected_biases` table with confidence score
+
+---
+
+**AI Coach Insight Card (Right Column):**
+```
+┌────────────────────────────────────────┐
+│          🤖 AI Coach Insight           │
+│                                        │
+│  "Your risk management score is solid. │
+│   Focus on timing entries to improve   │
+│   profitability. Consider waiting for  │
+│   confirmation signals rather than     │
+│   anticipating moves."                 │
+│                                        │
+│  ANALYSIS BASED ON 1Y HISTORY          │
+│                                        │
+│  ← Prev    Insight 1 of 4    Next →    │
+│                                        │
+│  [Ask AI Follow-Up Question →]         │
+└────────────────────────────────────────┘
+```
+
+**Implementation:**
+- Generate insights using LLM (GPT-4/Claude) with prompt:
+```
+  Given this trader profile:
+  - Skill scores: {profitability: 51, risk_mgmt: 70, timing: 75, discipline: 80}
+  - Detected biases: FOMO (78%), Overtrading (45%)
+  - Best strategy: Momentum breakout (68% win rate)
+  - Worst strategy: Mean reversion (32% win rate)
+  
+  Generate a personalized 2-3 sentence insight focused on ONE actionable improvement.
+  Use supportive tone, specific data, avoid jargon.
+
+   Total Equity    │ │ Total Return   │ │ Sharpe Ratio  │ │ Max Drawdown │
+│ $96,916.554     │ │ -3.08%         │ │ -0.58         │ │ -6.32%       │
+│                 │ │ (underperform) │ │ (poor risk-   │ │ (moderate)   │
+│                 │ │                │ │  adjusted)    │ │              │
+└─────────────────┘ └────────────────┘ └───────────────┘ └──────────────┘
+
+**On hover:** Show explanation tooltip:
+- "Sharpe Ratio: Measures return per unit of risk. Negative means losses exceeded gains."
+
+---
+
+**Equity Curve Section:**
+Equity Curve
+(Chart showing account value over time with colored regime overlays)
+Green zones: "Following Strategy" (discipline high)
+Red zones: "Emotional Trading" (bias detected)
+Yellow zones: "Learning Phase" (neutral)
+$100k ┤         ╱────╲
+       │       ╱      ╲  [Red zone]
+$98k  ┤     ╱          ╲╱────────
+       │   ╱  [Green]
+$96k  ┤ ╱
+       └─────────────────────────────
+       Jan    Feb    Mar    Apr    May
+Annotations:
+
+Feb 15: "Revenge trading streak started (5 rapid trades)"
+Mar 20: "Returned to discipline after 2-week break"
+
+[View Trade-by-Trade Breakdown →]
+
+**Backend:**
+- Classify each trade into regime based on bias detection + strategy adherence
+- Color-code equity curve by regime
+- Store regime changes in `equity_regimes` table
+
+---
+
+**New Section: Win Rate by Time of Day**
+Performance by Time of Day
+Your best hours:        Your worst hours:
+10:00 AM - 11:00 AM    2:00 PM - 3:00 PM
+(72% win rate)         (28% win rate)
+Win Rate
+100% ┤    ╱╲
+│   ╱  ╲
+50% ┤──╱────╲────╲╱──
+│          ╲╱
+0% ┤
+└────────────────────────
+9am 10  11  12  1   2   3  4pm
+💡 AI Insight: You show FOMO patterns after lunch.
+Consider: Set rule to avoid trading 2-3pm.
+[Set Trading Hours Restriction →]
+
+---
+
+**New Section: Strategy Performance Breakdown**
+Strategy DNA Performance
+Your AI-detected strategies ranked by profitability:
+
+Momentum Breakout           ████████░░ 68% win rate
+(48 trades, Avg: +$127)     Your best strategy ✓
+Trend Following             ███████░░░ 61% win rate
+(32 trades, Avg: +$89)      Consistent performer
+Range Bound Mean Reversion  ████░░░░░░ 38% win rate
+(28 trades, Avg: -$43)      Avoid this ✗
+News Event Scalping         ███░░░░░░░ 25% win rate
+(19 trades, Avg: -$118)     Your worst strategy ✗
+
+🎯 Recommendation: Focus 80% of activity on strategies #1-2.
+Eliminate or paper-trade #3-4 until improvement.
+[See Trade Clusters on Map →]
+
+---
+
+### **4. TRADE REPLAY PAGE - "Reconstruct Every Decision"**
+
+**Layout:**
+Trade Replay
+Filters: [All Trades ▼] [All Strategies ▼] [All Outcomes ▼]
+Search: [Find symbol, date, or note...]
+─────────────────────────────────────────────────────────
+Timeline View:
+(Horizontal scrollable timeline)
+Jan 15        Jan 18         Jan 22        Jan 25
+🟢 Win        🔴 Loss       🟢 Win        🔴 Loss
+SPY +$47      AAPL -$23     MSFT +$89     TSLA -$156
+───────────────────●──────────────────────────────────────
+(Selected: Jan 18 AAPL)
+─────────────────────────────────────────────────────────
+Trade Details:
+Symbol: AAPL
+Entry: Jan 18, 10:32 AM @ $180.50
+Exit: Jan 18, 2:47 PM @ $179.10
+P/L: -$23 (-0.78%)
+Holding Time: 4h 15m
+Your Strategy: Momentum Breakout (detected by AI)
+Bias Detected: 🔴 FOMO (entered after 15% run-up)
+─────────────────────────────────────────────────────────
+Chart Reconstruction:
+(Candlestick chart with markers)
+     Entry ↓          Exit ↓
+$182 ┤    │  ╱╲        │
+     │    │╱    ╲      │
+$180 ┤────●──────╲─────●
+     │           ╲╱    
+$178 ┤
+     └─────────────────────────
+     10am  11   12   1    2   3pm
+News Headlines (from that time):
+
+10:15 AM: "Apple announces new iPhone pre-orders"
+11:30 AM: "Tech sector surges on Fed comments"
+
+Technical Indicators:
+
+RSI: 73 (overbought at entry)
+MACD: Bullish crossover (confirmed)
+Volume: 2.3x average (high conviction)
+
+─────────────────────────────────────────────────────────
+🤖 AI Post-Trade Analysis:
+Why This Trade Failed:
+You entered during a parabolic move after the stock had
+already run up 15% in 2 days. The RSI at 73 indicated
+overbought conditions. While the news was bullish, most
+gains had already been captured.
+This matches your "FOMO entry" pattern—you've done this
+in 12 of your last 50 trades with a 31% win rate.
+What You Should Have Done:
+Wait for a pullback to the 20-period EMA ($177-178 range)
+before entering. Your momentum breakout strategy works
+best on the FIRST breakout, not the continuation.
+Similar Trades:
+
+Jan 10 TSLA: Same pattern, -$89 loss
+Dec 28 MSFT: Same pattern, -$47 loss
+→ You have a 27% win rate on "late breakout entries"
+
+Counterfactual:
+If you had waited 45 minutes for the pullback, your
+entry would have been $178.20, resulting in a -$18 loss
+instead of -$23 (or potential +$40 gain if held).
+[Ask AI: How do I fix this pattern? →]
+─────────────────────────────────────────────────────────
+Your Journal Note:
+"Saw the news and felt I had to get in. Knew it was
+high but didn't want to miss out."
+Emotion Detected: 🔴 FOMO, 🟡 Urgency
+[Edit Note] [Flag for Review]
+─────────────────────────────────────────────────────────
+[← Previous Trade]    [Next Trade →]    [Compare Similar]
+
+**Implementation:**
+
+Backend:
+- Store market snapshots in `trade_snapshots` table:
+  - OHLCV data for ±2 hours around trade
+  - Technical indicators (calculate using TA-Lib)
+  - News headlines (pull from NewsAPI or Alpaca News)
+- Generate AI analysis using LLM:
+```python
+  prompt = f"""
+  Analyze this losing trade:
+  - Entry: {trade.entry_price} at {trade.entry_time}
+  - Exit: {trade.exit_price} at {trade.exit_time}
+  - Market context: RSI {indicators.rsi}, MACD {indicators.macd}
+  - News: {headlines}
+  - Trader's pattern: {user.detected_biases}
+  
+  Provide:
+  1. Why it failed (2-3 sentences)
+  2. Pattern match (reference similar trades)
+  3. Counterfactual: What if they waited/exited earlier?
+  4. Actionable fix (1 sentence)
+  
+  Use supportive tone, specific data, avoid jargon.
+  """
+```
+- Store analysis in `trade_analysis` table
+
+Frontend:
+- Use Recharts for candlestick chart
+- Custom markers for entry/exit points
+- Timeline component with infinite scroll
+- Filter/search using Elasticsearch or Postgres FTS
+
+---
+
+### **5. AI COACH CHAT INTERFACE**
+
+**Full-Screen Layout:**
+┌────────────────────────────────────────────────────────┐
+│  🤖 AI Trading Coach                     [Minimize] [×]│
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  Chat History:                                         │
+│                                                        │
+│  You:                                                  │
+│  Why did I lose money on AAPL last week?               │
+│                                                        │
+│  AI Coach:                                             │
+│  You had 3 AAPL trades last week. Let me analyze...   │
+│                                                        │
+│  ┌─────────────────────────────────────────┐          │
+│  │ Trade 1: Jan 18, 10:32 AM              │          │
+│  │ Entry: $180.50 → Exit: $179.10         │          │
+│  │ Loss: -$23                              │          │
+│  │                                         │          │
+│  │ Why it failed:                          │          │
+│  │ FOMO entry after 15% run-up. RSI was   │          │
+│  │ overbought at 73. This is your #1      │          │
+│  │ loss pattern.                           │          │
+│  │                                         │          │
+│  │ [View Full Trade Replay →]             │          │
+│  └─────────────────────────────────────────┘          │
+│                                                        │
+│  The other 2 trades were smaller wins (+$12, +$8).   │
+│  Your net AAPL result: -$3                            │
+│                                                        │
+│  💡 Insight: You need to avoid chasing stocks that    │
+│  have already moved 10%+ in a single day. Set an      │
+│  alert to warn you?                                    │
+│                                                        │
+│  [Yes, Create Alert] [No Thanks]                       │
+│                                                        │
+│  ────────────────────────────────────────────────     │
+│                                                        │
+│  You:                                                  │
+│  What's my biggest weakness overall?                   │
+│                                                        │
+│  AI Coach:                                             │
+│  Based on your 127 trades over 6 months:              │
+│                                                        │
+│  Your #1 weakness: Entry timing                       │
+│                                                        │
+│  You tend to enter too early or too late:             │
+│  • 34% of trades: Entered before confirmation         │
+│  • 23% of trades: Entered after optimal price         │
+│                                                        │
+│  When you wait for confirmation signals, your         │
+│  win rate is 68%. When you don't, it drops to 42%.   │
+│                                                        │
+│  ┌─────────────────────────────────────────┐          │
+│  │ Your Entry Timing Distribution:         │          │
+│  │                                         │          │
+│  │ Too Early  ████████░░ 34%              │          │
+│  │ Optimal    ███████████ 43%              │          │
+│  │ Too Late   ██████░░░░░ 23%              │          │
+│  └─────────────────────────────────────────┘          │
+│                                                        │
+│  Recommendation: Before entering, check:              │
+│  1. Is RSI < 70? (avoid overbought)                   │
+│  2. Has price pulled back to support?                 │
+│  3. Is volume confirming the move?                    │
+│                                                        │
+│  Want me to create a pre-trade checklist for you?     │
+│                                                        │
+│  [Yes, Create Checklist] [Show More Stats]            │
+│                                                        │
+├────────────────────────────────────────────────────────┤
+│  Suggested Questions:                                  │
+│  • Show me my overtrading patterns                     │
+│  • What market conditions do I perform best in?        │
+│  • Compare my best vs worst strategies                 │
+│  • Why do I hold losers too long?                      │
+│                                                        │
+│  Type your question...                    [Send →]    │
+└────────────────────────────────────────────────────────┘
+
+**Implementation:**
+
+Backend:
+- Chat API endpoint: `/api/chat`
+- Request: `{user_id, message, conversation_history[]}`
+- Response: `{ai_response, suggested_actions[], embedded_data{}}`
+
+LLM Prompt Template:
+```python
+system_prompt = f"""
+You are an AI trading coach helping a trader improve their decision-making.
+
+Trader Profile:
+- Experience: {user.experience_level}
+- Trading style: {user.trading_style}
+- Skill scores: {user.skill_scores}
+- Detected biases: {user.biases}
+- Trade stats: {user.trade_stats}
+
+Access to data:
+- Full trade history (query with tools)
+- Bias detections
+- Strategy clusters
+- Market data
+
+Guidelines:
+- Be supportive but honest
+- Use specific examples from their trades
+- Provide actionable advice (not generic)
+- Offer to create alerts/checklists when relevant
+- Use data to back up claims ("You've done this in 12/50 trades...")
+- Keep responses under 150 words unless deep analysis requested
+- End with a follow-up question or action
+
+Conversation history:
+{conversation_history}
+
+User message: {user_message}
+
+Respond with JSON:
+{{
+  "text": "Your response here",
+  "embedded_data": {{"trades": [...], "chart": {...}}},
+  "suggested_actions": ["Create Alert", "View Replay"]
+}}
+"""
+```
+
+Use function calling to query database:
+```python
+tools = [
+    {
+        "name": "get_trades_by_symbol",
+        "description": "Get trades for a specific symbol",
+        "parameters": {"symbol": "string", "start_date": "string"}
+    },
+    {
+        "name": "get_bias_instances",
+        "description": "Get examples of a specific bias",
+        "parameters": {"bias_type": "string", "limit": "int"}
+    },
+    {
+        "name": "get_strategy_performance",
+        "description": "Get performance breakdown by strategy",
+        "parameters": {}
+    }
+]
+```
+
+Frontend:
+- Store conversation in `chat_history` table
+- Render embedded data (trades, charts) as rich cards
+- Suggested questions as clickable chips
+- Voice input option (Web Speech API)
+
+---
+
+### **6. STRATEGY DNA CLUSTERING PAGE**
+
+**Layout:**
+Strategy DNA
+Your AI-discovered trading strategies
+─────────────────────────────────────────────────────────
+Visual Cluster Map:
+(2D scatter plot of all trades, colored by strategy)
+High Return
+    ↑
+    │     ●●●        🟢 Momentum Breakout
+    │   ●●●●●        (48 trades, 68% win)
+    │  ●●●●●●
+    │    ●●●
+    │ ●●              🔵 Trend Following
+────┼────●●●──→      (32 trades, 61% win)
+    │  ●●●●
+    │ ●●●●            🟡 Range Mean Reversion
+    │  ●●●            (28 trades, 38% win)
+    │   ●●
+    │  ●●●            🔴 News Event Scalping
+    ↓                 (19 trades, 25% win)
+Low Return
+
+   Low Risk ────────────→ High Risk
+[Zoom In] [Filter by Outcome] [Export Data]
+─────────────────────────────────────────────────────────
+Strategy Performance Table:
+Strategy                   Trades  Win%   Avg P/L  Sharpe  Grade
+──────────────────────────────────────────────────────────────────
+🟢 Momentum Breakout         48    68%    +$127    0.89    A
+🔵 Trend Following           32    61%    +$89     0.54    B+
+🟡 Range Mean Reversion      28    38%    -$43    -0.23    D
+🔴 News Event Scalping       19    25%    -$118   -0.67    F
+Click any row to see all trades in that strategy.
+─────────────────────────────────────────────────────────
+🤖 AI Recommendations:
+
+FOCUS: Allocate 70% of your capital to Momentum Breakout
+and Trend Following strategies. These are your strengths.
+ELIMINATE: Stop trading Range Mean Reversion and News
+Event Scalping until you refine your approach. They've
+cost you $3,420 combined.
+REFINE: Your Momentum Breakout trades work best when:
+• RSI is between 50-70 (not overbought)
+• Entry is within 2% of breakout level
+• Volume is >1.5x average
+[Create Strategy Rules] [Set Alerts]
+
+─────────────────────────────────────────────────────────
+Strategy Deep Dive:
+Select a strategy to analyze: [Momentum Breakout ▼]
+─────────────────────────────────────────────────────────
+Momentum Breakout Analysis:
+Definition (AI-detected):
+Trades where you entered within 3% of a 20-day high, during
+an uptrend (price > 50-day MA), with above-average volume.
+Your Statistics:
+
+Total trades: 48
+Win rate: 68% (vs your overall 54%)
+Average win: +$187
+Average loss: -$67
+Best holding time: 2-6 hours
+Worst time of day: 2-3pm (FOMO entries)
+
+Example Winning Trades:
+┌──────────────────────────────────────────────┐
+│ Jan 22: MSFT +$89                            │
+│ Entry: $380.20 (0.8% above breakout)         │
+│ Exit: $383.50 (momentum continuation)        │
+│ Why it worked: Clean breakout, high volume   │
+│ [View Replay →]                              │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ Jan 30: NVDA +$156                           │
+│ Entry: $875.50 (1.2% above breakout)         │
+│ Exit: $881.30 (hit target)                   │
+│ Why it worked: Trend aligned, no bias        │
+│ [View Replay →]                              │
+└──────────────────────────────────────────────┘
+Example Losing Trades:
+┌──────────────────────────────────────────────┐
+│ Jan 18: AAPL -$23                            │
+│ Entry: $180.50 (15% above breakout)          │
+│ Why it failed: FOMO entry, overbought RSI    │
+│ [View Replay →]                              │
+└──────────────────────────────────────────────┘
+💡 Pattern: Your momentum trades fail when you enter
+too late (>5% above breakout). Set a rule to only
+enter within 3% of initial breakout.
+[Create Entry Rule Alert]
+─────────────────────────────────────────────────────────
+
+**Implementation:**
+
+Backend (ML Clustering):
+```python
+# Feature engineering for each trade
+features = [
+    'entry_price_pct_from_20day_high',
+    'rsi_at_entry',
+    'volume_vs_avg',
+    'price_vs_50day_ma',
+    'holding_time_hours',
+    'time_of_day_numeric',
+    'pnl_pct',
+    'was_winner'
+]
+
+# Unsupervised clustering
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.preprocessing import StandardScaler
+
+X = extract_features(trades)
+X_scaled = StandardScaler().fit_transform(X)
+
+# Try multiple algorithms, pick best silhouette score
+clusterer = DBSCAN(eps=0.5, min_samples=5)
+labels = clusterer.fit_predict(X_scaled)
+
+# Label each cluster with strategy name using LLM
+for cluster_id in unique(labels):
+    cluster_trades = trades[labels == cluster_id]
+    
+    # Describe cluster to LLM
+    description = f"""
+    This cluster has {len(cluster_trades)} trades with these characteristics:
+    - Avg RSI at entry: {mean(cluster_trades.rsi)}
+    - Avg price vs 50MA: {mean(cluster_trades.price_vs_ma)}
+    - Avg holding time: {mean(cluster_trades.holding_hours)} hours
+    - Win rate: {sum(cluster_trades.was_winner) / len(cluster_trades)}
+    
+    What trading strategy does this represent? Name it in 2-3 words.
+    """
+    
+    strategy_name = llm_generate(description)
+    
+    # Store
+    save_strategy_cluster(cluster_id, strategy_name, cluster_trades)
+```
+
+Store in `strategy_clusters` table:
+- cluster_id
+- strategy_name (AI-generated)
+- trade_ids (array)
+- characteristics (JSON: avg features)
+- performance_stats (JSON: win rate, avg P/L, etc.)
+
+Frontend:
+- Scatter plot using D3.js or Recharts scatter
+- Color-code by cluster
+- Click point → Show trade details
+- Click cluster → Filter table
+
+---
+
+### **7. BIAS DETECTION DETAIL PAGE**
+
+**URL:** `/analytics/biases`
+
+**Layout:**
+Cognitive Bias Detection
+Your psychological trading patterns analyzed by AI
+─────────────────────────────────────────────────────────
+Detected Biases (Ranked by Impact):
+
+🔴 FOMO (Fear of Missing Out)
+Severity: ████████░░ 78 /100 (High)
+Frequency: 12 of last 50 trades (24%)
+Cost: -$1,240 average per instance
+Total impact: -$14,880 (6 months)
+What is FOMO?
+You enter trades late because you fear missing the move.
+This leads to buying high and selling low.
+Your FOMO Triggers:
+• After seeing +10% green candles
+• Between 2-3pm (post-lunch anxiety)
+• After missing a prior setup on the same symbol
+Example Trades:
+┌─────────────────────────────────────────────┐
+│ Jan 18: AAPL -$23                           │
+│ Entered after 15% run-up, RSI overbought    │
+│ [View Trade Replay →]                       │
+└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ Jan 10: TSLA -$89                           │
+│ Entered 30 min after breakout, late entry   │
+│ [View Trade Replay →]                       │
+└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ Dec 28: MSFT -$47                           │
+│ Chased stock after news, missed pullback    │
+│ [View Trade Replay →]                       │
+└─────────────────────────────────────────────┘
+[See All 12 FOMO Trades →]
+🤖 AI Recommendation:
+Set a pre-trade rule: Only enter if price is within 3%
+of initial breakout level. Wait for pullbacks.
+[Create Alert] [Create Checklist Rule]
+Your Progress:
+(Line chart showing FOMO frequency over time)
+Incidents/Month
+15 ┤ ●
+│  ╲
+10 ┤   ╲  ●
+│    ╲╱
+5 ┤     ●──●  (Improving! ↓40%)
+└──────────────
+Jan Feb Mar Apr
+
+─────────────────────────────────────────────────────────
+
+🟡 Overtrading
+Severity: █████░░░░░ 45 /100 (Moderate)
+Frequency: After losses, you trade 2.3x more frequently
+Cost: -$680 average per revenge trade
+Total impact: -$6,120 (6 months)
+What is Overtrading?
+You trade excessively to "make back" losses quickly,
+leading to poor decision-making and compounding losses.
+Your Pattern:
+• After a -$50+ loss: You average 4.7 trades that day
+• On normal days: You average 2.1 trades
+• Win rate during revenge periods: 31% (vs 54% normal)
+Worst Revenge Trading Sequences:
+┌─────────────────────────────────────────────┐
+│ Jan 19 (after AAPL loss):                   │
+│ • Trade 1: TSLA -$67                        │
+│ • Trade 2: SPY -$34                         │
+│ • Trade 3: NVDA -$89                        │
+│ • Trade 4: MSFT -$23                        │
+│ Total damage: -$213 in 3 hours              │
+│ [View Sequence →]                           │
+└─────────────────────────────────────────────┘
+🤖 AI Recommendation:
+Set a daily loss limit of $100. After hitting it,
+the platform locks trading for the rest of the day.
+[Enable Daily Loss Limit] [Set Max Trades/Day]
+
+─────────────────────────────────────────────────────────
+
+🟢 Hesitation Bias (Mild)
+Severity: ███░░░░░░░ 23 /100 (Low)
+Frequency: You missed 5 setups matching your best strategy
+Opportunity cost: +$890 potential (not a loss, but missed gain)
+What is Hesitation?
+You recognize good setups but don't execute due to fear
+or overthinking. These setups later proved successful.
+Missed Opportunities:
+┌─────────────────────────────────────────────┐
+│ Jan 25: NVDA breakout setup                 │
+│ Matched your Momentum Breakout pattern      │
+│ You watched but didn't enter                │
+│ Stock moved +3.4% (would've been +$187)     │
+│ [Why didn't I take this? Ask AI →]          │
+└─────────────────────────────────────────────┘
+🤖 AI Recommendation:
+Hesitation is less harmful than FOMO. Focus on fixing
+FOMO first, then we'll address hesitation.
+
+─────────────────────────────────────────────────────────
+Bias-Free Trades:
+You executed 26 trades (52%) without detectable biases.
+These had a 71% win rate and averaged +$94 profit.
+This proves you CAN trade well when disciplined!
+[See Bias-Free Trades →]
+─────────────────────────────────────────────────────────
+
+**Implementation:**
+
+Backend (Bias Detection Algorithms):
+```python
+# FOMO Detection
+def detect_fomo(trade, market_data):
+    """
+    Detects FOMO by checking:
+    1. Entry after significant run-up (>10% in 1-2 days)
+    2. RSI > 70 (overbought)
+    3. Entry far from recent support (>3% above)
+    4. High volume (retail participation)
+    """
+    recent_high = market_data.rolling(20).max()
+    pct_from_high = (trade.entry_price - recent_high) / recent_high
+    
+    rsi = calculate_rsi(market_data)
+    
+    if pct_from_high > 0.10 and rsi > 70:
+        return {
+            'bias': 'FOMO',
+            'confidence': 0.85,
+            'evidence': {
+                'run_up_pct': pct_from_high,
+                'rsi': rsi,
+                'entry_vs_support': calculate_support_distance(trade, market_data)
+            }
+        }
+    return None
+
+# Overtrading Detection
+def detect_overtrading(user_trades):
+    """
+    Detects revenge trading by comparing trade frequency
+    after losses vs normal days.
+    """
+    trades_by_day = group_by_date(user_trades)
+    
+    for date, day_trades in trades_by_day.items():
+        prior_day_pnl = get_prior_day_pnl(user_trades, date)
+        
+        if prior_day_pnl < -50 and len(day_trades) > 4:
+            # This is likely revenge trading
+            for trade in day_trades:
+                label_bias(trade, 'Overtrading', confidence=0.78)
+
+# Hesitation Detection
+def detect_hesitation(user, market_data):
+    """
+    Detects missed opportunities by finding setups that:
+    1. Match user's best-performing strategy pattern
+    2. User did not enter
+    3. Setup later proved successful
+    """
+    strategy_patterns = get_strategy_patterns(user, strategy='Momentum Breakout')
+    
+    for date in date_range:
+        market_setup = analyze_market_setup(market_data, date)
+        
+        if matches_pattern(market_setup, strategy_patterns):
+            user_entered = check_if_user_traded(user, market_setup.symbol, date)
+            
+            if not user_entered:
+                outcome = calculate_hypothetical_outcome(market_setup)
+                
+                if outcome > 0:
+                    log_missed_opportunity(user, market_setup, outcome)
+```
+
+Run these algorithms nightly for all users (Celery job).
+Store results in `detected_biases` table.
+
+---
+
+### **8. PREMIUM FEATURE GATING & MONETIZATION**
+
+**Subscription Tiers:**
+┌─────────────────────────────────────────────────────────┐
+│                    Pricing Plans                        │
+└─────────────────────────────────────────────────────────┘
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│     FREE       │  │      PRO       │  │     TEAM       │
+│                │  │                │  │                │
+│    $0/mo       │  │   $29/mo       │  │   $99/mo       │
+│                │  │                │  │                │
+│ ✓ Sandbox only │  │ ✓ Everything   │  │ ✓ Everything   │
+│ ✓ 30-day       │  │   in Free      │  │   in Pro       │
+│   history      │  │ ✓ Alpaca       │  │ ✓ Multiple     │
+│ ✓ Basic AI     │  │   integration  │  │   accounts     │
+│   insights     │  │ ✓
+Unlimited    │  │ ✓ Team         │
+│   (1/day)      │  │   history      │  │   dashboard    │
+│ ✓ Skill scores │  │ ✓ Unlimited    │  │ ✓ Compare      │
+│   (weekly)     │  │   AI Coach     │  │   traders      │
+│ ✓ 5 AI Coach   │  │ ✓ Real-time    │  │ ✓ API access   │
+│   questions/mo │  │   bias alerts  │  │ ✓ White-label  │
+│ ✓ Basic bias   │  │ ✓ Strategy DNA │  │   reports      │
+│   detection    │  │ ✓ Trade Replay │  │ ✓ Priority     │
+│                │  │   (all trades) │  │   support      │
+│                │  │ ✓ Priority     │  │ ✓ Dedicated    │
+│                │  │   support      │  │   success mgr  │
+│                │  │                │  │                │
+│ [Start Free] →│  │ [Start Trial]→│  │ [Contact Us] →│
+└────────────────┘  └────────────────┘  └────────────────┘
+All plans: Cancel anytime • 14-day money-back guarantee
+
+**In-App Gating:**
+
+Free users see:
+┌────────────────────────────────────────────┐
+│ 🔒 Unlock Strategy DNA Clustering          │
+│                                            │
+│ See how AI groups your trades into         │
+│ strategies and identifies your best/worst. │
+│                                            │
+│ Preview: You have 4 detected strategies    │
+│ → Momentum Breakout (48 trades, 68% win)   │
+│ → [2 more strategies... upgrade to see]    │
+│                                            │
+│ [Upgrade to Pro - $29/month →]             │
+│                                            │
+│ ✨ Pro users report 23% improvement in     │
+│    discipline within 60 days               │
+└────────────────────────────────────────────┘
+
+**Trial Logic:**
+- 14-day Pro trial for all new users
+- During trial: Full access, daily email with "You've used X features today"
+- Day 10: "4 days left - here's what you'll lose"
+- Day 13: "Tomorrow your AI Coach access ends. Upgrade now?"
+- Post-trial: Hard gate on premium features, downgrade to Free tier
+
+---
+
+### **9. TECHNICAL ARCHITECTURE**
+
+**Tech Stack:**
+
+**Frontend:**
+- **Framework:** React 18 with TypeScript
+- **State Management:** Redux Toolkit (for global state) + React Query (for server state)
+- **UI Library:** Tailwind CSS + shadcn/ui components
+- **Charts:** Recharts (analytics), D3.js (custom visualizations)
+- **Routing:** React Router v6
+- **Forms:** React Hook Form + Zod validation
+- **Real-time:** WebSocket (for live data sync)
+
+**Backend:**
+- **API:** FastAPI (Python 3.11+)
+- **Database:** PostgreSQL 15 (main data) + Redis (caching, job queue)
+- **ORM:** SQLAlchemy 2.0
+- **Auth:** JWT tokens (access + refresh)
+- **Background Jobs:** Celery + Redis
+- **Task Scheduler:** Celery Beat (for nightly AI jobs)
+- **File Storage:** AWS S3 (for exported reports, CSVs)
+- **Monitoring:** Sentry (errors), DataDog (metrics)
+
+**AI/ML:**
+- **LLM:** OpenAI GPT-4 (primary) + Anthropic Claude (backup)
+- **ML Framework:** scikit-learn (clustering), pandas (data processing)
+- **Technical Indicators:** TA-Lib
+- **NLP:** spaCy (for journal note analysis)
+
+**Infrastructure:**
+- **Hosting:** AWS ECS (containerized backend), Vercel (frontend)
+- **CDN:** CloudFlare
+- **Database:** AWS RDS (Postgres), AWS ElastiCache (Redis)
+- **CI/CD:** GitHub Actions → Docker → AWS ECS
+- **SSL:** AWS Certificate Manager (ACM)
+
+---
+
+**Database Schema (Key Tables):**
+```sql
+-- Users & Auth
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
+    subscription_tier VARCHAR(20) DEFAULT 'free', -- 'free', 'pro', 'team'
+    trial_ends_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_login_at TIMESTAMP
+);
+
+CREATE TABLE user_profiles (
+    user_id UUID PRIMARY KEY REFERENCES users(id),
+    experience_level VARCHAR(20), -- 'beginner', 'intermediate', 'expert'
+    trading_styles TEXT[], -- ['day_trading', 'swing_trading']
+    risk_tolerance VARCHAR(20), -- 'conservative', 'moderate', 'aggressive'
+    goals TEXT[],
+    preferred_ai_tone VARCHAR(20) DEFAULT 'supportive', -- 'supportive', 'direct', 'data_focused'
+    onboarding_completed BOOLEAN DEFAULT FALSE
+);
+
+-- Alpaca Integration
+CREATE TABLE alpaca_credentials (
+    user_id UUID PRIMARY KEY REFERENCES users(id),
+    api_key_id VARCHAR(255) NOT NULL, -- Encrypted
+    secret_key VARCHAR(255) NOT NULL, -- Encrypted
+    account_type VARCHAR(20) DEFAULT 'paper', -- 'paper' or 'live' (future)
+    last_synced_at TIMESTAMP,
+    sync_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Sandbox Simulation
+CREATE TABLE sandbox_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    starting_balance DECIMAL(15,2) DEFAULT 100000.00,
+    current_balance DECIMAL(15,2),
+    unrealized_pnl DECIMAL(15,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE sandbox_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sandbox_account_id UUID REFERENCES sandbox_accounts(id),
+    symbol VARCHAR(10) NOT NULL,
+    side VARCHAR(4) NOT NULL, -- 'buy' or 'sell'
+    qty DECIMAL(15,4) NOT NULL,
+    order_type VARCHAR(20) NOT NULL, -- 'market', 'limit', 'stop', 'stop_limit'
+    limit_price DECIMAL(15,4),
+    stop_price DECIMAL(15,4),
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'filled', 'cancelled'
+    filled_price DECIMAL(15,4),
+    filled_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE sandbox_positions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sandbox_account_id UUID REFERENCES sandbox_accounts(id),
+    symbol VARCHAR(10) NOT NULL,
+    qty DECIMAL(15,4) NOT NULL,
+    avg_entry_price DECIMAL(15,4) NOT NULL,
+    current_price DECIMAL(15,4),
+    unrealized_pnl DECIMAL(15,2),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Unified Trades (from both Alpaca and Sandbox)
+CREATE TABLE trades (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    source VARCHAR(20) NOT NULL, -- 'alpaca' or 'sandbox'
+    external_id VARCHAR(255), -- Alpaca trade ID or sandbox order ID
+    symbol VARCHAR(10) NOT NULL,
+    side VARCHAR(4) NOT NULL,
+    qty DECIMAL(15,4) NOT NULL,
+    entry_price DECIMAL(15,4) NOT NULL,
+    exit_price DECIMAL(15,4),
+    entry_time TIMESTAMP NOT NULL,
+    exit_time TIMESTAMP,
+    pnl DECIMAL(15,2),
+    pnl_pct DECIMAL(10,4),
+    holding_time_seconds INT,
+    status VARCHAR(20) DEFAULT 'open', -- 'open' or 'closed'
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_trades_user_time ON trades(user_id, entry_time DESC);
+CREATE INDEX idx_trades_symbol ON trades(symbol);
+
+-- Market Snapshots (for Trade Replay)
+CREATE TABLE trade_snapshots (
+    trade_id UUID PRIMARY KEY REFERENCES trades(id),
+    ohlcv_data JSONB, -- Candlestick data ±2 hours
+    technical_indicators JSONB, -- RSI, MACD, etc.
+    news_headlines JSONB, -- [{time, headline, source}]
+    market_regime VARCHAR(50), -- 'trending_up', 'ranging', 'volatile', etc.
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- AI Analysis
+CREATE TABLE trade_analysis (
+    trade_id UUID PRIMARY KEY REFERENCES trades(id),
+    why_failed TEXT, -- LLM-generated explanation
+    why_succeeded TEXT,
+    pattern_match TEXT, -- Reference to similar trades
+    counterfactual TEXT, -- "What if you waited..."
+    actionable_fix TEXT,
+    generated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE detected_biases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trade_id UUID REFERENCES trades(id),
+    user_id UUID REFERENCES users(id),
+    bias_type VARCHAR(50) NOT NULL, -- 'FOMO', 'Overtrading', 'Hesitation'
+    severity DECIMAL(5,2), -- 0-100 score
+    confidence DECIMAL(5,2), -- 0-1 confidence
+    evidence JSONB, -- {run_up_pct: 0.15, rsi: 73}
+    detected_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_biases_user ON detected_biases(user_id, detected_at DESC);
+
+-- Strategy Clustering
+CREATE TABLE strategy_clusters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    strategy_name VARCHAR(100) NOT NULL, -- AI-generated name
+    trade_ids UUID[], -- Array of trade IDs in this cluster
+    characteristics JSONB, -- {avg_rsi: 65, avg_holding_hours: 4.2}
+    performance_stats JSONB, -- {win_rate: 0.68, avg_pnl: 127}
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Skill Scores (time-series)
+CREATE TABLE skill_scores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    score_date DATE NOT NULL,
+    profitability DECIMAL(5,2),
+    risk_management DECIMAL(5,2),
+    timing DECIMAL(5,2),
+    discipline DECIMAL(5,2),
+    overall DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_skill_scores_user_date ON skill_scores(user_id, score_date DESC);
+
+-- AI Insights (carousel)
+CREATE TABLE ai_insights (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    insight_text TEXT NOT NULL,
+    insight_type VARCHAR(50), -- 'warning', 'opportunity', 'learning'
+    priority INT DEFAULT 50, -- 0-100, higher = show first
+    generated_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP -- When this insight is no longer relevant
+);
+
+-- AI Coach Chat
+CREATE TABLE chat_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    role VARCHAR(20) NOT NULL, -- 'user' or 'assistant'
+    content TEXT NOT NULL,
+    embedded_data JSONB, -- {trades: [...], charts: {...}}
+    suggested_actions TEXT[], -- ['Create Alert', 'View Replay']
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_chat_user_time ON chat_history(user_id, created_at DESC);
+
+-- Alerts & Notifications
+CREATE TABLE user_alerts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    alert_type VARCHAR(50) NOT NULL, -- 'bias_warning', 'daily_loss_limit', 'new_insight'
+    trigger_conditions JSONB, -- {bias: 'FOMO', entry_pct_above_breakout: 3}
+    is_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE alert_notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    alert_id UUID REFERENCES user_alerts(id),
+    triggered_at TIMESTAMP DEFAULT NOW(),
+    message TEXT NOT NULL,
+    was_read BOOLEAN DEFAULT FALSE
+);
+```
+
+---
+
+**API Endpoints:**
+Auth
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/refresh
+POST   /api/auth/logout
+User Profile
+GET    /api/users/me
+PATCH  /api/users/me/profile
+GET    /api/users/me/subscription
+Account Connection
+POST   /api/integrations/alpaca/connect
+DELETE /api/integrations/alpaca/disconnect
+POST   /api/integrations/alpaca/test
+POST   /api/integrations/alpaca/sync
+GET    /api/integrations/alpaca/status
+POST   /api/sandbox/create
+GET    /api/sandbox/account
+PATCH  /api/sandbox/reset
+Trading (Sandbox only)
+POST   /api/sandbox/orders
+GET    /api/sandbox/orders
+GET    /api/sandbox/positions
+Trades & Analysis
+GET    /api/trades?start_date=&end_date=&symbol=&outcome=
+GET    /api/trades/:id
+GET    /api/trades/:id/replay
+GET    /api/trades/:id/analysis
+Analytics
+GET    /api/analytics/overview
+GET    /api/analytics/skill-scores?range=1y
+GET    /api/analytics/biases
+GET    /api/analytics/strategies
+GET    /api/analytics/equity-curve
+AI Coach
+POST   /api/chat/messages
+GET    /api/chat/history?limit=50
+POST   /api/chat/suggested-questions
+Insights
+GET    /api/insights?priority_min=50
+POST   /api/insights/generate (admin/cron)
+Alerts
+GET    /api/alerts
+POST   /api/alerts
+PATCH  /api/alerts/:id
+DELETE /api/alerts/:id
+GET    /api/alerts/notifications?unread_only=true
+PATCH  /api/alerts/notifications/:id/read
+Subscription
+POST   /api/subscription/upgrade
+POST   /api/subscription/cancel
+POST   /api/subscription/portal (Stripe customer portal)
+
+---
+
+**Background Jobs (Celery):**
+```python
+# Scheduled Jobs (Celery Beat)
+
+@celery.task
+def sync_alpaca_data():
+    """Runs every 15 minutes"""
+    users = get_users_with_alpaca_connected()
+    for user in users:
+        pull_alpaca_trades(user)
+        pull_alpaca_positions(user)
+        update_last_synced_at(user)
+
+@celery.task
+def generate_nightly_insights():
+    """Runs daily at 2 AM"""
+    users = get_active_users()
+    for user in users:
+        trades = get_recent_trades(user, days=7)
+        
+        # Run ML models
+        detect_biases(user, trades)
+        cluster_strategies(user)
+        calculate_skill_scores(user)
+        
+        # Generate AI insights
+        insights = generate_insights_llm(user)
+        store_insights(user, insights)
+        
+        # Send email digest (if enabled)
+        send_weekly_digest(user)
+
+@celery.task
+def cleanup_expired_insights():
+    """Runs daily at 3 AM"""
+    delete_insights_where(expires_at < NOW())
+
+# On-Demand Jobs
+
+@celery.task
+def analyze_trade_on_close(trade_id):
+    """Triggered when a trade is closed"""
+    trade = get_trade(trade_id)
+    market_snapshot = fetch_market_snapshot(trade)
+    
+    # Store snapshot
+    store_trade_snapshot(trade_id, market_snapshot)
+    
+    # Generate AI analysis
+    analysis = generate_trade_analysis_llm(trade, market_snapshot)
+    store_trade_analysis(trade_id, analysis)
+    
+    # Check for biases
+    bias = detect_bias(trade, market_snapshot)
+    if bias:
+        store_detected_bias(trade_id, bias)
+        
+        # Send alert if user has enabled it
+        send_bias_alert(trade.user_id, bias)
+
+@celery.task
+def export_user_data(user_id, format='csv'):
+    """Triggered by user request"""
+    trades = get_all_trades(user_id)
+    df = pd.DataFrame(trades)
+    
+    filename = f"{user_id}_trades_{datetime.now()}.{format}"
+    s3_url = upload_to_s3(df, filename)
+    
+    send_email_with_download_link(user_id, s3_url)
+```
+
+---
+
+### **10. MVP DEVELOPMENT ROADMAP**
+
+**Phase 1: Foundation (Weeks 1-4)**
+- [ ] Set up project structure (monorepo: frontend + backend)
+- [ ] Database schema implementation
+- [ ] User auth (register, login, JWT)
+- [ ] Onboarding flow (mode selection, personalization)
+- [ ] Sandbox account creation + basic order execution
+- [ ] Alpaca API integration (connect, test, sync trades)
+- [ ] Basic dashboard (metric cards, placeholder charts)
+
+**Phase 2: Core Features (Weeks 5-8)**
+- [ ] Trade Replay page (timeline, chart, details)
+- [ ] Market snapshot storage (OHLCV, indicators, news)
+- [ ] AI trade analysis (integrate LLM, generate explanations)
+- [ ] Skill scoring algorithm implementation
+- [ ] Bias detection algorithms (FOMO, overtrading, hesitation)
+- [ ] Portfolio Analytics page (skill DNA, biases, insights)
+
+**Phase 3: AI Intelligence (Weeks 9-12)**
+- [ ] Strategy clustering (ML pipeline)
+- [ ] Strategy DNA page (cluster visualization, performance table)
+- [ ] AI Coach chat interface (LLM integration, function calling)
+- [ ] AI insight generation (nightly job)
+- [ ] Alert system (create alerts, trigger notifications)
+
+**Phase 4: Polish & Launch (Weeks 13-16)**
+- [ ] Subscription & payment integration (Stripe)
+- [ ] Premium feature gating
+- [ ] Email notifications (weekly digests, trial expiring, etc.)
+- [ ] Mobile responsive design
+- [ ] Performance optimization (caching, lazy loading)
+- [ ] Security audit (penetration testing, encryption validation)
+- [ ] Beta launch with 50 users
+
+**Post-MVP (Ongoing)**
+- [ ] Trade Replay interactive annotations
+- [ ] Voice input for AI Coach
+- [ ] Team features (multi-user dashboard, comparison)
+- [ ] Backtesting integration
+- [ ] Paper-to-live transition coaching
+- [ ] API for third-party integrations
+
+---
+
+# 🚀 COMPREHENSIVE PRD (Product Requirements Document)
+
+Now I'll compile everything into a professional PRD format that you can save and share with your development team.
+
+---
+
+# **Product Requirements Document (PRD)**
+## **AI Trading Decision Intelligence Platform**
+
+**Version:** 1.0  
+**Date:** January 2026  
+**Author:** Product Team  
+**Status:** Ready for Development
+
+---
+
+## **1. EXECUTIVE SUMMARY**
+
+### **1.1 Product Vision**
+
+We are building an **AI Trading Decision Intelligence Platform** that makes traders better decision-makers by analyzing their trading psychology, skill patterns, and cognitive biases. This is NOT a trading bot, signal service, or execution platform—it's an intelligence layer that sits above existing trading tools to provide insights that help traders improve.
+
+**Core Value Proposition:**  
+"Understand why you win or lose, discover your psychological patterns, and become a consistently better trader through AI-powered analysis."
+
+### **1.2 Market Positioning**
+
+| Platform | What They Do | Our Difference |
+|----------|-------------|----------------|
+| TradingView | Charting & technical analysis | We analyze YOUR specific trading patterns |
+| QuantConnect | Algorithmic backtesting | We focus on human psychology, not just strategy |
+| 3Commas | Automated trading bots | We make YOU better, not replace you |
+| **Our Platform** | **Trader Intelligence** | **Personalized AI coaching based on YOUR trades** |
+
+We are not replacing these platforms—we complement them by providing the "why" behind trading outcomes.
+
+---
+
+## **2. PRODUCT GOALS**
+
+### **2.1 Business Goals**
+- **Q2 2026:** Launch MVP with 1,000 beta users (50% on Free, 50% on Pro trial)
+- **Q3 2026:** Achieve 20% Free→Pro conversion rate
+- **Q4 2026:** Reach $50K MRR with 2,000 paying users
+- **2027:** Expand to Team tier, reach $200K MRR
+
+### **2.2 User Goals**
+- **Understand:** Why specific trades succeeded or failed
+- **Discover:** Personal cognitive biases affecting performance
+- **Improve:** Measurable skill development over time
+- **Optimize:** Focus on best-performing strategies, eliminate worst
+
+### **2.3 Success Metrics**
+- **Engagement:** 3+ sessions/week, 10+ AI Coach questions/month
+- **Retention:** 70% month-2 retention for Pro users
+- **Satisfaction:** NPS score > 50
+- **Impact:** Users show 15%+ skill score improvement in 90 days
+
+---
+
+## **3. TARGET USERS**
+
+### **3.1 Primary Persona: "Struggling Sarah"**
+- **Demographics:** 25-40, has been trading for 6-18 months
+- **Pain Points:** 
+  - Inconsistent results despite knowing technical analysis
+  - Keeps making same mistakes (FOMO, overtrading)
+  - Can't figure out which strategies work for her
+  - Feels lost after losses, no idea how to improve
+- **Goals:**
+  - Understand her psychological patterns
+  - Develop discipline and consistency
+  - Transition from break-even to profitable
+- **Buying Motivation:** Will pay for insights that help her "fix" herself
+
+### **3.2 Secondary Persona: "Data-Driven David"**
+- **Demographics:** 30-50, experienced trader (2-5 years)
+- **Pain Points:**
+  - Has spreadsheets of trades but no insights
+  - Wants quantified skill metrics
+  - Needs advanced pattern recognition
+- **Goals:**
+  - Optimize strategy mix
+  - Track skill evolution over time
+  - Benchmark against peers
+- **Buying Motivation:** Will pay for sophisticated analytics
+
+### **3.3 Future Persona: "Team Lead Tracy"**
+- **Demographics:** Prop trading firm manager, hedge fund team lead
+- **Goals:**
+  - Monitor multiple traders' performance
+  - Identify psychological issues across team
+  - Compare traders to find training needs
+- **Buying Motivation:** Will pay premium for team features
+
+---
+
+## **4. CORE FEATURES** (MVP)
+
+### **4.1 Dual Account System**
+
+**Must support TWO equal-priority modes:**
+
+#### **Option A: Alpaca Paper Trading Integration**
+- User connects their Alpaca Paper Trading account via API keys
+- Platform pulls: trade history, positions, account metrics
+- Automatic sync every 15 minutes (configurable)
+- Keys encrypted with AES-256, stored securely
+- Real market data from Alpaca's data API
+
+**Benefits:**
+- Real market conditions, authentic validation
+- No setup friction if user already has Alpaca
+- Professional trading environment
+
+**User Flow:**
+1. Click "Connect Alpaca"
+2. Enter API Key ID + Secret Key
+3. Platform tests connection
+4. Initial sync pulls last 90 days of trades
+5. Ongoing auto-sync every 15 min
+
+---
+
+#### **Option B: Sandbox Simulation (Internal)**
+- Fully self-contained trading simulator
+- User sets starting capital ($10k/$50k/$100k/custom)
+- Executes market/limit/stop/stop-limit orders
+- Real-time market data (same source as Alpaca mode)
+- Realistic fills with slippage simulation (0.1-0.5%)
+- Instant execution (no API latency)
+
+**Benefits:**
+- Zero external dependencies
+- Instant onboarding (30 seconds)
+- Complete privacy (no external account needed)
+- Perfect for demos and trials
+
+**User Flow:**
+1. Click "Enter Sandbox"
+2. Select starting capital
+3. Account created instantly
+4. Start trading immediately
+
+---
+
+**Critical Requirement:**  
+Both modes must feed identical data into AI analysis pipeline. Use adapter pattern:
+TradeDataSource Interface
+├── AlpacaAdapter (external API)
+└── SandboxAdapter (internal simulator)
+↓
+Unified Trade Model
+↓
+AI Analysis Pipeline
+
+Users can switch between modes in Settings without losing AI analysis history.
+
+---
+
+### **4.2 Trade Replay Engine**
+
+**Purpose:** Reconstruct market conditions at the time of each trade to explain outcomes.
+
+**Features:**
+- Timeline view of all trades (horizontal scroll)
+- Click any trade → Full reconstruction:
+  - Candlestick chart with entry/exit markers
+  - Technical indicators (RSI, MACD, Volume, etc.)
+  - News headlines from that time period
+  - Market regime label (trending/ranging/volatile)
+  - AI-generated explanation
+- Filter by: Wins/Losses, Strategy type, Symbol, Date range
+- Compare mode: View 2 trades side-by-side
+
+**AI Explanation Format:**
+Why This Trade Failed:
+[2-3 sentence analysis with specific data]
+Pattern Match:
+[Reference to similar trades in user's history]
+Counterfactual:
+[What if you had waited, exited earlier, etc.]
+Actionable Fix:
+[1 sentence recommendation]
+
+**Technical Requirements:**
+- Store market snapshots (OHLCV ±2 hours around trade)
+- Calculate technical indicators using TA-Lib
+- Pull news from Alpaca News API or NewsAPI
+- Generate AI analysis using GPT-4 within 30 seconds of trade close
+- Cache analysis to avoid regeneration
+
+---
+
+### **4.3 Trader Skill Model**
+
+**Purpose:** Quantify user's trading abilities across dimensions.
+
+**Skill Dimensions:**
+1. **Profitability (0-100):** Win rate × Avg win size
+2. **Risk Management (0-100):** Stop-loss adherence + position sizing consistency
+3. **Entry Timing (0-100):** Distance from optimal entry price (hindsight analysis)
+4. **Exit Timing (0-100):** Distance from optimal exit price
+5. **Discipline (0-100):** Adherence to detected strategy patterns
+6. **Overall Score:** Weighted average of above
+
+**Calculation Frequency:**
+- Update weekly (nightly job)
+- Store time-series in database for historical trends
+- Show improvement velocity: "Your timing improved 12% this month"
+
+**Visualization:**
+- Radar chart (5 dimensions + overall)
+- Historical trend lines (click dimension → see evolution)
+- Peer comparison: "You're in top 32% for Risk Management"
+- Weak/strong area labels with recommendations
+
+**Features:**
+- Click any dimension → See:
+  - Trend line over time
+  - Example trades affecting this score
+  - AI recommendations for improvement
+  - Peer percentile
+
+---
+
+### **4.4 Cognitive Bias Detector**
+
+**Purpose:** Identify psychological patterns harming performance.
+
+**Detected Biases:**
+
+**1. FOMO (Fear of Missing Out)**
+- **Detection Logic:** Entry after >10% run-up, RSI > 70, far from support
+- **Impact Metrics:** Frequency, cost per instance, total damage
+- **Display:** Severity bar (0-100), example trades, AI explanation
+
+**2. Overtrading / Revenge Trading**
+- **Detection Logic:** Trade frequency spike after losses (>2x normal)
+- **Impact Metrics:** Win rate during revenge periods vs normal
+- **Display:** Trade sequences showing revenge pattern
+
+**3. Hesitation Bias**
+- **Detection Logic:** Missed setups matching user's best strategy that later proved successful
+- **Impact Metrics:** Opportunity cost (not a loss, but missed gain)
+- **Display:** List of missed opportunities with hypothetical outcomes
+
+**4. Confirmation Bias** (Future)
+- **Detection Logic:** Ignoring contradictory signals, cherry-picking indicators
+
+**5. Recency Bias** (Future)
+- **Detection Logic:** Over-weighting recent outcomes in decisions
+
+**Features:**
+- Bias detail page with:
+  - Severity score (0-100)
+  - Frequency (% of trades affected)
+  - Cost (avg loss per instance)
+  - Example trades with replay links
+  - AI recommendations
+  - Progress tracking (is bias improving over time?)
+- Real-time alerts: "🔴 FOMO Alert: You're entering after a 12% run-up. Proceed carefully?"
+- "Create Alert" button to enable notifications
+
+**Technical Requirements:**
+- Run bias detection algorithms after each trade sync
+- Use ML models trained on labeled trade patterns
+- Store results in `detected_biases` table
+- Generate alerts via WebSocket or email
+
+---
+
+### **4.5 Strategy DNA Generator**
+
+**Purpose:** Use ML to discover user's trading strategies and rank them.
+
+**Process:**
+1. **Feature Engineering:** Extract features from each trade:
+   - Entry price % from 20-day high/low
+   - RSI at entry
+   - Volume vs average
+   - Price vs moving averages (50-day, 200-day)
+   - Holding time
+   - Time of day
+   - Outcome (win/loss, P/L %)
+
+2. **Clustering:** Apply unsupervised ML (DBSCAN, K-Means, Hierarchical)
+   - Find optimal number of clusters (silhouette score)
+   - Group similar trades together
+
+3. **Labeling:** Use LLM to name each cluster:
+Prompt: "This cluster has these characteristics: [features].
+What trading strategy does this represent?
+Name it in 2-3 words (e.g., 'Momentum Breakout')."
+
+4. **Performance Attribution:** Calculate for each strategy:
+   - Number of trades
+   - Win rate
+   - Average P/L
+   - Sharpe ratio
+   - Assign letter grade (A-F)
+
+**Visualization:**
+- **Cluster Map:** 2D scatter plot (Risk vs Return)
+  - Each point is a trade
+  - Color-coded by strategy
+  - Click point → Trade details
+  - Click cluster → Filter to trades in that strategy
+
+- **Performance Table:**
+Strategy Name       | Trades | Win%  | Avg P/L | Grade
+────────────────────────────────────────────────────────
+Momentum Breakout   | 48     | 68%   | +$127   | A
+Trend Following     | 32     | 61%   | +$89    | B+
+Mean Reversion      | 28     | 38%   | -$43    | D
+News Scalping       | 19     | 25%   | -$118   | F
+
+- **AI Recommendations:**
+
+FOCUS: Allocate 70% to strategies A-B
+ELIMINATE: Stop trading strategies D-F until refined
+REFINE: Your Momentum Breakout works best when [conditions]
+
+
+**Features:**
+- Click any strategy → Deep dive:
+  - Definition (AI-generated explanation)
+  - Statistics (win rate, avg P/L, best holding time)
+  - Example winning trades
+  - Example losing trades
+  - Pattern analysis: "Your momentum trades fail when you enter >5% above breakout"
+  - "Create Entry Rule Alert" button
+
+**Technical Requirements:**
+- Run clustering nightly for all users with >20 trades
+- Store clusters in `strategy_clusters` table
+- Regenerate when user has 10+ new trades
+- Use scikit-learn for ML, pandas for data processing
+
+---
+
+### **4.6 AI Coach Conversational Interface**
+
+**Purpose:** Natural language Q&A about user's trading.
+
+**Capabilities:**
+- Answer questions like:
+  - "Why did I lose on AAPL last week?"
+  - "What's my biggest weakness?"
+  - "Show me trades where I violated my risk rules"
+  - "What market conditions do I perform best in?"
+  
+- Response format:
+  - Text answer (2-4 paragraphs)
+  - Embedded data: Trade cards, charts, tables
+  - Suggested actions: Buttons like "Create Alert", "View Replay"

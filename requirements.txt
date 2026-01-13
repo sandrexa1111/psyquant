@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+alpaca-trade-api
+pydantic
+python-multipart
+pandas
+pandas-ta
+numpy
+yfinance
+sqlalchemy
+python-dotenv
+google-generativeai

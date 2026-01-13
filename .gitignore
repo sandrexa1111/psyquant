@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+.env
+*.db
+*.sqlite3
+debug_output.txt
+rss_debug.txt
+rss_debug_result.txt
+user_data.json
+sim_data.json
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
